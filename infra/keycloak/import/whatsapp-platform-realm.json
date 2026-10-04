@@ -1,0 +1,49 @@
+{
+  "realm": "whatsapp-platform",
+  "displayName": "WhatsApp Platform",
+  "enabled": true,
+
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
+  "rememberMe": false,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+
+  "clients": [
+    {
+      "clientId": "whatsapp-platform-bff",
+      "name": "WhatsApp Platform BFF",
+      "description": "Server-side BFF client for human web authentication.",
+      "enabled": true,
+      "protocol": "openid-connect",
+
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "redirectUris": [
+  "http://localhost:8011/auth/callback"
+],
+      "attributes": {
+  "pkce.code.challenge.method": "S256"
+},
+      "consentRequired": false
+    }
+  ]
+}
