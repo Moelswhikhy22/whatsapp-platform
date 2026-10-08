@@ -10,6 +10,7 @@ from app.db.models.conversation_assignment_history import (
 from app.db.models.customer_company import CustomerCompany
 from app.db.models.customer_contact import CustomerContact
 from app.db.models.employee import Employee
+from app.db.models.external_identity import ExternalIdentity
 from app.db.models.group import Group
 from app.db.models.group_membership import GroupMembership
 from app.db.models.integration import (
@@ -33,6 +34,11 @@ from app.db.models.raw_webhook_event import (
     RawWebhookProcessingStatus,
     RawWebhookProvider,
 )
+from app.db.models.security_access_log import (
+    SecurityAccessLog,
+    SecurityAccessOutcome,
+    SecurityPrincipalType,
+)
 from app.db.models.template import (
     Template,
     TemplateStatus,
@@ -53,6 +59,7 @@ __all__ = [
     "CustomerCompany",
     "CustomerContact",
     "Employee",
+    "ExternalIdentity",
     "Group",
     "GroupMembership",
     "Integration",
@@ -68,6 +75,9 @@ __all__ = [
     "RawWebhookEvent",
     "RawWebhookProcessingStatus",
     "RawWebhookProvider",
+    "SecurityAccessLog",
+    "SecurityAccessOutcome",
+    "SecurityPrincipalType",
     "Template",
     "TemplateStatus",
     "TemplateType",
