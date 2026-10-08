@@ -13,6 +13,11 @@ from app.auth.config import (
     load_session_cookie_config,
     load_token_exchange_config,
 )
+from app.auth.id_token import (
+    IdTokenJwksUnavailableError,
+    InvalidIdTokenError,
+    get_id_token_validator,
+)
 from app.auth.pkce import (
     create_code_challenge,
     generate_code_verifier,
@@ -39,7 +44,6 @@ router = APIRouter(
     prefix="/auth",
     tags=["authentication"],
 )
-
 
 _STATE_COOKIE = "wp_oauth_state"
 _PKCE_COOKIE = "wp_oauth_pkce_verifier"
@@ -195,7 +199,7 @@ async def login() -> RedirectResponse:
     )
 
     response = RedirectResponse(
-        url=(f"{authorization_endpoint}?{query}"),
+        url=f"{authorization_endpoint}?{query}",
         status_code=status.HTTP_302_FOUND,
     )
 
@@ -245,9 +249,9 @@ async def callback(
 
     if expected_state is None or code_verifier is None or nonce is None:
         return _callback_response(
-            status_code=(status.HTTP_400_BAD_REQUEST),
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=("Authentication transaction is missing or expired."),
-            secure=(config.transaction_cookie_secure),
+            secure=config.transaction_cookie_secure,
         )
 
     if state is None or not compare_digest(
@@ -255,23 +259,23 @@ async def callback(
         expected_state,
     ):
         return _callback_response(
-            status_code=(status.HTTP_400_BAD_REQUEST),
-            detail=("Invalid authentication state."),
-            secure=(config.transaction_cookie_secure),
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid authentication state.",
+            secure=config.transaction_cookie_secure,
         )
 
     if error is not None:
         return _callback_response(
-            status_code=(status.HTTP_400_BAD_REQUEST),
-            detail=("Authorization was not completed."),
-            secure=(config.transaction_cookie_secure),
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Authorization was not completed.",
+            secure=config.transaction_cookie_secure,
         )
 
     if code is None or not code:
         return _callback_response(
-            status_code=(status.HTTP_400_BAD_REQUEST),
-            detail=("Authorization code is missing."),
-            secure=(config.transaction_cookie_secure),
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Authorization code is missing.",
+            secure=config.transaction_cookie_secure,
         )
 
     exchange_config = load_token_exchange_config()
@@ -282,20 +286,44 @@ async def callback(
             code=code,
             code_verifier=code_verifier,
         )
+
     except TokenExchangeRejectedError:
         return _callback_response(
-            status_code=(status.HTTP_400_BAD_REQUEST),
-            detail=("Authorization code exchange failed."),
-            secure=(config.transaction_cookie_secure),
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Authorization code exchange failed.",
+            secure=config.transaction_cookie_secure,
         )
+
     except (
         TokenExchangeUnavailableError,
         InvalidTokenResponseError,
     ):
         return _callback_response(
-            status_code=(status.HTTP_502_BAD_GATEWAY),
-            detail=("Identity provider exchange failed."),
-            secure=(config.transaction_cookie_secure),
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Identity provider exchange failed.",
+            secure=config.transaction_cookie_secure,
+        )
+
+    validator = get_id_token_validator()
+
+    try:
+        principal = await validator.validate(
+            token=token_set.id_token,
+            expected_nonce=nonce,
+        )
+
+    except InvalidIdTokenError:
+        return _callback_response(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Identity token validation failed.",
+            secure=config.transaction_cookie_secure,
+        )
+
+    except IdTokenJwksUnavailableError:
+        return _callback_response(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service is unavailable.",
+            secure=config.transaction_cookie_secure,
         )
 
     session_cookie_config = load_session_cookie_config()
@@ -310,7 +338,7 @@ async def callback(
     )
 
     session_record = SessionRecord(
-        status="pending_validation",
+        status="authenticated",
         access_token=token_set.access_token,
         id_token=token_set.id_token,
         refresh_token=token_set.refresh_token,
@@ -319,6 +347,7 @@ async def callback(
         refresh_expires_in=(token_set.refresh_expires_in),
         scope=token_set.scope,
         nonce=nonce,
+        subject=principal.subject,
     )
 
     try:
@@ -326,11 +355,12 @@ async def callback(
             session_id=session_id,
             record=session_record,
         )
+
     except SessionStorageError:
         return _callback_response(
-            status_code=(status.HTTP_503_SERVICE_UNAVAILABLE),
-            detail=("Session service is unavailable."),
-            secure=(config.transaction_cookie_secure),
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Session service is unavailable.",
+            secure=config.transaction_cookie_secure,
         )
 
     return _successful_login_response(
@@ -367,6 +397,7 @@ async def logout(
         await session_store.delete(
             session_id=session_id,
         )
+
     except SessionStorageError:
         response = JSONResponse(
             status_code=(status.HTTP_503_SERVICE_UNAVAILABLE),

@@ -1,0 +1,48 @@
+services:
+  outgoing-webhook-worker:
+    image: whatsapp-platform-app:dev
+
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: whatsapp-platform-outgoing-webhook-worker
+
+    command:
+      - python
+      - -m
+      - app.workers.outgoing_webhook
+
+    volumes:
+      - ./app:/app/app
+
+    environment:
+      PYTHONUNBUFFERED: "1"
+
+      DATABASE_URL: >-
+        postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+
+      RABBITMQ_URL: >-
+        amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/${RABBITMQ_VHOST}
+
+      VAULT_ADDR: http://vault:8200
+
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID}
+
+      VAULT_KV_MOUNT_POINT: ${VAULT_KV_MOUNT_POINT:-secret}
+
+      VAULT_VERIFY: "true"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      rabbitmq:
+        condition: service_healthy
+
+      vault:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+    init: true

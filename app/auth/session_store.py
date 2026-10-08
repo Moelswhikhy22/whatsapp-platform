@@ -33,6 +33,7 @@ class SessionRecord:
     refresh_expires_in: int | None
     scope: str | None
     nonce: str
+    subject: str | None = None
 
     def to_json(self) -> str:
         return json.dumps(
@@ -104,6 +105,10 @@ class SessionRecord:
             nonce=_required_str(
                 payload,
                 "nonce",
+            ),
+            subject=_optional_str(
+                payload,
+                "subject",
             ),
         )
 

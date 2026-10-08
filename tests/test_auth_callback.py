@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock
 from urllib.parse import parse_qs, urlparse
 
@@ -7,6 +8,11 @@ from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 
 from app.auth.config import TokenExchangeConfig
+from app.auth.id_token import (
+    HumanPrincipal,
+    IdTokenJwksUnavailableError,
+    InvalidIdTokenError,
+)
 from app.auth.token_exchange import OAuthTokenSet
 from app.main import create_app
 
@@ -83,7 +89,11 @@ def _start_login(
 
     assert response.status_code == 302
 
-    query = parse_qs(urlparse(response.headers["location"]).query)
+    query = parse_qs(
+        urlparse(
+            response.headers["location"],
+        ).query
+    )
 
     return query["state"][0]
 
@@ -109,6 +119,23 @@ async def _successful_exchange(
     )
 
 
+def _mock_valid_identity(
+    monkeypatch: MonkeyPatch,
+) -> AsyncMock:
+    validator = AsyncMock()
+
+    validator.validate.return_value = HumanPrincipal(
+        subject="keycloak-user-123",
+    )
+
+    monkeypatch.setattr(
+        "app.api.auth.get_id_token_validator",
+        lambda: validator,
+    )
+
+    return validator
+
+
 def test_auth_callback_accepts_valid_transaction(
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -119,9 +146,17 @@ def test_auth_callback_accepts_valid_transaction(
         _successful_exchange,
     )
 
+    validator = _mock_valid_identity(
+        monkeypatch,
+    )
+
     client, redis = _create_test_client()
 
     state = _start_login(client)
+
+    nonce = client.cookies.get("wp_oauth_nonce")
+
+    assert nonce is not None
 
     response = client.get(
         "/auth/callback",
@@ -137,6 +172,11 @@ def test_auth_callback_accepts_valid_transaction(
 
     assert response.headers["cache-control"] == "no-store"
 
+    validator.validate.assert_awaited_once_with(
+        token="id-token",
+        expected_nonce=nonce,
+    )
+
     assert redis.set.await_count == 1
 
     session_id = client.cookies.get("wp_session")
@@ -148,6 +188,98 @@ def test_auth_callback_accepts_valid_transaction(
     assert redis_call.args[0] == (f"wp:session:{session_id}")
 
     assert redis_call.kwargs["ex"] == 28_800
+
+    stored_session = json.loads(redis_call.args[1])
+
+    assert stored_session["status"] == ("authenticated")
+
+    assert stored_session["subject"] == ("keycloak-user-123")
+
+    assert stored_session["id_token"] == ("id-token")
+
+
+def test_auth_callback_rejects_invalid_id_token(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    _configure_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        "app.api.auth.exchange_authorization_code",
+        _successful_exchange,
+    )
+
+    validator = AsyncMock()
+
+    validator.validate.side_effect = InvalidIdTokenError(
+        "Invalid ID token.",
+    )
+
+    monkeypatch.setattr(
+        "app.api.auth.get_id_token_validator",
+        lambda: validator,
+    )
+
+    client, redis = _create_test_client()
+
+    state = _start_login(client)
+
+    response = client.get(
+        "/auth/callback",
+        params={
+            "code": "test-code",
+            "state": state,
+        },
+    )
+
+    assert response.status_code == 401
+
+    assert response.json() == {"detail": ("Identity token validation failed.")}
+
+    redis.set.assert_not_awaited()
+
+    assert client.cookies.get("wp_session") is None
+
+
+def test_auth_callback_handles_jwks_unavailable(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    _configure_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        "app.api.auth.exchange_authorization_code",
+        _successful_exchange,
+    )
+
+    validator = AsyncMock()
+
+    validator.validate.side_effect = IdTokenJwksUnavailableError(
+        "JWKS unavailable.",
+    )
+
+    monkeypatch.setattr(
+        "app.api.auth.get_id_token_validator",
+        lambda: validator,
+    )
+
+    client, redis = _create_test_client()
+
+    state = _start_login(client)
+
+    response = client.get(
+        "/auth/callback",
+        params={
+            "code": "test-code",
+            "state": state,
+        },
+    )
+
+    assert response.status_code == 503
+
+    assert response.json() == {"detail": ("Authentication service is unavailable.")}
+
+    redis.set.assert_not_awaited()
+
+    assert client.cookies.get("wp_session") is None
 
 
 def test_auth_callback_rejects_state_mismatch(
@@ -257,6 +389,10 @@ def test_auth_callback_consumes_transaction_cookies(
         _successful_exchange,
     )
 
+    _mock_valid_identity(
+        monkeypatch,
+    )
+
     client, _ = _create_test_client()
 
     state = _start_login(client)
@@ -324,6 +460,10 @@ def test_auth_callback_does_not_expose_tokens(
         _successful_exchange,
     )
 
+    _mock_valid_identity(
+        monkeypatch,
+    )
+
     client, _ = _create_test_client()
 
     state = _start_login(client)
@@ -353,6 +493,10 @@ def test_auth_callback_session_cookie_matches_redis_key(
     monkeypatch.setattr(
         "app.api.auth.exchange_authorization_code",
         _successful_exchange,
+    )
+
+    _mock_valid_identity(
+        monkeypatch,
     )
 
     client, redis = _create_test_client()

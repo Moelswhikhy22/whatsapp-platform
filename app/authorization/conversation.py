@@ -114,6 +114,9 @@ def can_claim_conversation(
     employee identity because a successful claim makes that employee
     the responsible employee.
 
+    Human roles are additive. A multi-role actor may claim when at
+    least one of their tenant roles authorizes the self-claim.
+
     This function performs authorization and claim precondition checks.
     It does not provide concurrency guarantees. The eventual database
     claim operation must still be atomic.
@@ -131,17 +134,19 @@ def can_claim_conversation(
     if actor.employee_id is None:
         return False
 
-    if context.role is Role.EMPLOYEE:
-        return conversation.group_id in actor.member_group_ids
+    is_group_member = conversation.group_id in actor.member_group_ids
 
-    if context.role is Role.GROUP_ADMIN:
-        return (
-            conversation.group_id in actor.member_group_ids
-            and conversation.group_id in actor.administered_group_ids
-        )
+    if not is_group_member:
+        return False
 
-    if context.role is Role.TENANT_ADMIN:
-        return conversation.group_id in actor.member_group_ids
+    if context.has_role(Role.TENANT_ADMIN):
+        return True
+
+    if context.has_role(Role.GROUP_ADMIN) and conversation.group_id in actor.administered_group_ids:
+        return True
+
+    if context.has_role(Role.EMPLOYEE):
+        return True
 
     return False
 

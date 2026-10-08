@@ -1,0 +1,64 @@
+services:
+  media-process-worker:
+    image: whatsapp-platform-app:dev
+
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: whatsapp-platform-media-process-worker
+
+    command:
+      - python
+      - -m
+      - app.workers.media_process
+
+    volumes:
+      - ./app:/app/app
+
+    environment:
+      PYTHONUNBUFFERED: "1"
+
+      APP_ENV: ${APP_ENV:-local}
+
+      DATABASE_URL: >-
+        postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+
+      RABBITMQ_URL: >-
+        amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/${RABBITMQ_VHOST}
+
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID}
+      VAULT_KV_MOUNT_POINT: ${VAULT_KV_MOUNT_POINT:-secret}
+      VAULT_VERIFY: "true"
+
+      META_HTTP_TIMEOUT_SECONDS: ${META_HTTP_TIMEOUT_SECONDS:-15}
+
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_REGION: ${S3_REGION}
+      S3_BUCKET: ${S3_BUCKET}
+
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_SESSION_TOKEN: ${S3_SESSION_TOKEN:-}
+
+      S3_ADDRESSING_STYLE: ${S3_ADDRESSING_STYLE:-path}
+
+      MEDIA_RETENTION_DAYS: ${MEDIA_RETENTION_DAYS:-365}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      rabbitmq:
+        condition: service_healthy
+
+      vault:
+        condition: service_healthy
+
+      s3mock:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+    init: true

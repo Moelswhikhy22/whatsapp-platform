@@ -184,7 +184,7 @@ def test_assignment_history_has_conversation_time_index() -> None:
         index
         for index in ConversationAssignmentHistory.__table__.indexes
         if isinstance(index, Index)
-        and index.name == ("ix_conversation_assignment_history_tenant_conversation_created_at")
+        and index.name == ("ix_conversation_assignment_tenant_conversation_created_at")
     ]
 
     assert len(indexes) == 1

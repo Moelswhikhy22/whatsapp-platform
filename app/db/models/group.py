@@ -1,20 +1,39 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
+    Enum,
     ForeignKey,
-    String,
+    Integer,
     UniqueConstraint,
+    false,
     func,
     true,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+
+
+class OwnerUnavailablePolicy(StrEnum):
+    KEEP_OWNER = "keep_owner"
+    RETURN_TO_QUEUE = "return_to_queue"
+    AUTO_REASSIGN = "auto_reassign"
+    NOTIFY_ADMIN = "notify_admin"
+
+
+owner_unavailable_policy_type = Enum(
+    OwnerUnavailablePolicy,
+    name="owner_unavailable_policy",
+    values_callable=lambda enum_type: [member.value for member in enum_type],
+    validate_strings=True,
+)
 
 
 class Group(Base):
@@ -30,6 +49,10 @@ class Group(Base):
             "tenant_id",
             "name",
             name="uq_groups_tenant_id_name",
+        ),
+        CheckConstraint(
+            "offline_grace_seconds >= 0",
+            name=("ck_groups_offline_grace_seconds_non_negative"),
         ),
     )
 
@@ -48,8 +71,42 @@ class Group(Base):
     )
 
     name: Mapped[str] = mapped_column(
-        String(255),
         nullable=False,
+    )
+
+    claim_on_open: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
+    )
+
+    team_read_after_claim: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
+    )
+
+    allow_non_owner_employee_send: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
+    )
+
+    owner_unavailable_policy: Mapped[OwnerUnavailablePolicy] = mapped_column(
+        owner_unavailable_policy_type,
+        nullable=False,
+        default=OwnerUnavailablePolicy.KEEP_OWNER,
+        server_default=(OwnerUnavailablePolicy.KEEP_OWNER.value),
+    )
+
+    offline_grace_seconds: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=300,
+        server_default="300",
     )
 
     active: Mapped[bool] = mapped_column(

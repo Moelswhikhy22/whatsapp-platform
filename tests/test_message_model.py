@@ -264,10 +264,32 @@ def test_message_created_at_is_required() -> None:
     assert column.server_default is not None
 
 
-def test_message_source_and_attribution_are_deferred() -> None:
+def test_message_source_and_attribution_are_persisted() -> None:
     column_names = set(
         Message.__table__.c.keys(),
     )
 
-    assert "source" not in column_names
-    assert "actor_attribution" not in column_names
+    assert "source" in column_names
+    assert "actor_attribution" in column_names
+
+    source_column = Message.__table__.c.source
+    attribution_column = Message.__table__.c.actor_attribution
+
+    assert source_column.nullable is False
+    assert attribution_column.nullable is False
+
+    assert set(source_column.type.enums) == {
+        "meta",
+        "platform",
+        "odoo",
+        "integration",
+        "whatsapp_external",
+        "unknown",
+    }
+
+    assert set(attribution_column.type.enums) == {
+        "exact",
+        "represented",
+        "external",
+        "unknown",
+    }

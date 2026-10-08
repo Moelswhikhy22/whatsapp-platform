@@ -42,6 +42,22 @@ class MessageStatus(StrEnum):
     FAILED = "failed"
 
 
+class MessageSource(StrEnum):
+    META = "meta"
+    PLATFORM = "platform"
+    ODOO = "odoo"
+    INTEGRATION = "integration"
+    WHATSAPP_EXTERNAL = "whatsapp_external"
+    UNKNOWN = "unknown"
+
+
+class ActorAttribution(StrEnum):
+    EXACT = "exact"
+    REPRESENTED = "represented"
+    EXTERNAL = "external"
+    UNKNOWN = "unknown"
+
+
 message_direction_type = Enum(
     MessageDirection,
     name="message_direction",
@@ -61,6 +77,22 @@ message_type_type = Enum(
 message_status_type = Enum(
     MessageStatus,
     name="message_status",
+    values_callable=lambda enum_type: [member.value for member in enum_type],
+    validate_strings=True,
+)
+
+
+message_source_type = Enum(
+    MessageSource,
+    name="message_source",
+    values_callable=lambda enum_type: [member.value for member in enum_type],
+    validate_strings=True,
+)
+
+
+actor_attribution_type = Enum(
+    ActorAttribution,
+    name="actor_attribution",
     values_callable=lambda enum_type: [member.value for member in enum_type],
     validate_strings=True,
 )
@@ -152,6 +184,11 @@ class Message(Base):
         nullable=False,
     )
 
+    source: Mapped[MessageSource] = mapped_column(
+        message_source_type,
+        nullable=False,
+    )
+
     message_type: Mapped[MessageType] = mapped_column(
         message_type_type,
         nullable=False,
@@ -173,6 +210,11 @@ class Message(Base):
     external_actor_id: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
+    )
+
+    actor_attribution: Mapped[ActorAttribution] = mapped_column(
+        actor_attribution_type,
+        nullable=False,
     )
 
     status: Mapped[MessageStatus | None] = mapped_column(

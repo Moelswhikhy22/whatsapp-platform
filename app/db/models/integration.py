@@ -41,19 +41,23 @@ class Integration(Base):
         UniqueConstraint(
             "tenant_id",
             "id",
-            name="uq_integrations_tenant_id_id",
+            name=("uq_integrations_tenant_id_id"),
         ),
         UniqueConstraint(
             "tenant_id",
             "provider",
             "name",
-            name="uq_integrations_tenant_id_provider_name",
+            name=("uq_integrations_tenant_id_provider_name"),
         ),
         UniqueConstraint(
             "tenant_id",
             "provider",
             "external_account_id",
             name=("uq_integrations_tenant_id_provider_external_account_id"),
+        ),
+        UniqueConstraint(
+            "keycloak_client_id",
+            name=("uq_integrations_keycloak_client_id"),
         ),
     )
 
@@ -82,6 +86,11 @@ class Integration(Base):
     )
 
     external_account_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    keycloak_client_id: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )

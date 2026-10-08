@@ -207,16 +207,6 @@ def test_conversation_does_not_duplicate_customer_company() -> None:
     assert "customer_company_id" not in column_names
 
 
-def test_conversation_does_not_add_claim_fields_early() -> None:
-    column_names = set(
-        Conversation.__table__.c.keys(),
-    )
-
-    assert "responsible_employee_id" not in column_names
-    assert "claimed_at" not in column_names
-    assert "state" not in column_names
-
-
 def test_conversation_timestamps_are_required() -> None:
     created_at_column = Conversation.__table__.c.created_at
     updated_at_column = Conversation.__table__.c.updated_at

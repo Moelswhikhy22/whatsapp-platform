@@ -85,7 +85,6 @@ EXPECTED_ROLE_PERMISSIONS: dict[
             Permission.TEMPLATE_UPDATE,
             Permission.TEMPLATE_SEND,
             Permission.MEDIA_READ,
-            Permission.AUDIT_READ,
         }
     ),
     Role.EMPLOYEE: frozenset(

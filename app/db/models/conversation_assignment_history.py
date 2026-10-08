@@ -80,11 +80,15 @@ class ConversationAssignmentHistory(Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint(
-            ("previous_employee_id IS DISTINCT FROM new_employee_id"),
+            """
+            previous_employee_id
+            IS DISTINCT FROM
+            new_employee_id
+            """,
             name=("ck_conversation_assignment_history_employee_changed"),
         ),
         Index(
-            "ix_conversation_assignment_history_tenant_conversation_created_at",
+            "ix_conversation_assignment_tenant_conversation_created_at",
             "tenant_id",
             "conversation_id",
             "created_at",

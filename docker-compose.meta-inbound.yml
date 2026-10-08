@@ -1,0 +1,33 @@
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    command:
+      - python
+      - -m
+      - app.workers.meta_inbound
+
+    environment:
+      PYTHONUNBUFFERED: "1"
+
+      DATABASE_URL: >-
+        postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+
+      REDIS_URL: redis://redis:6379/0
+
+      RABBITMQ_URL: >-
+        amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/${RABBITMQ_VHOST}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      redis:
+        condition: service_healthy
+
+      rabbitmq:
+        condition: service_healthy
+
+    restart: unless-stopped

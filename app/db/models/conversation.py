@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     DateTime,
+    Enum,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -14,6 +16,24 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+
+
+class ConversationState(StrEnum):
+    QUEUED = "queued"
+    CLAIMED = "claimed"
+    OPEN = "open"
+    WAITING_CUSTOMER = "waiting_customer"
+    WAITING_TEAM = "waiting_team"
+    CLOSED = "closed"
+    REOPENED = "reopened"
+
+
+conversation_state_type = Enum(
+    ConversationState,
+    name="conversation_state",
+    values_callable=lambda enum_type: [member.value for member in enum_type],
+    validate_strings=True,
+)
 
 
 class Conversation(Base):
@@ -67,15 +87,27 @@ class Conversation(Base):
             name="fk_conversations_tenant_group",
             ondelete="RESTRICT",
         ),
-        Index(
-            "ix_conversations_tenant_id_group_id",
-            "tenant_id",
-            "group_id",
+        ForeignKeyConstraint(
+            [
+                "tenant_id",
+                "responsible_employee_id",
+            ],
+            [
+                "employees.tenant_id",
+                "employees.id",
+            ],
+            name="fk_conversations_tenant_responsible_employee",
+            ondelete="RESTRICT",
         ),
         Index(
             "ix_conversations_tenant_id_customer_contact_id",
             "tenant_id",
             "customer_contact_id",
+        ),
+        Index(
+            "ix_conversations_tenant_id_group_id",
+            "tenant_id",
+            "group_id",
         ),
     )
 
@@ -102,6 +134,22 @@ class Conversation(Base):
     )
 
     group_id: Mapped[UUID | None] = mapped_column(
+        nullable=True,
+    )
+
+    state: Mapped[ConversationState] = mapped_column(
+        conversation_state_type,
+        nullable=False,
+        default=ConversationState.QUEUED,
+        server_default=ConversationState.QUEUED.value,
+    )
+
+    responsible_employee_id: Mapped[UUID | None] = mapped_column(
+        nullable=True,
+    )
+
+    claimed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
     )
 

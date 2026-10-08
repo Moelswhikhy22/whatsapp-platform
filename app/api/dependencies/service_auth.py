@@ -13,19 +13,57 @@ from app.auth.service_token import (
     ServicePrincipal,
     get_service_token_validator,
 )
+from app.db.models.security_access_log import (
+    SecurityAccessOutcome,
+    SecurityPrincipalType,
+)
+from app.security_access import (
+    record_security_access,
+)
 
 
 async def require_service_principal(
     request: Request,
 ) -> ServicePrincipal:
-    token = _extract_bearer_token(request)
+    try:
+        token = _extract_bearer_token(request)
+
+    except HTTPException:
+        authorization = request.headers.get("Authorization")
+
+        reason_code = (
+            "missing_bearer_token" if authorization is None else "invalid_authorization_header"
+        )
+
+        await record_security_access(
+            request=request,
+            principal_type=(SecurityPrincipalType.ANONYMOUS),
+            principal_id=None,
+            event=("service.token_authentication"),
+            outcome=(SecurityAccessOutcome.DENIED),
+            reason_code=reason_code,
+        )
+
+        raise
 
     validator = get_service_token_validator()
 
     try:
-        return await validator.validate(token)
+        principal = await validator.validate(token)
 
     except MissingRequiredScopeError as exc:
+        # The validator did not return a trusted
+        # ServicePrincipal, so do not infer or
+        # reconstruct an integration identity.
+        await record_security_access(
+            request=request,
+            principal_type=(SecurityPrincipalType.ANONYMOUS),
+            principal_id=None,
+            event=("service.token_authentication"),
+            outcome=(SecurityAccessOutcome.DENIED),
+            reason_code=("missing_required_scope"),
+        )
+
         raise HTTPException(
             status_code=(status.HTTP_403_FORBIDDEN),
             detail=("Required service scope is missing."),
@@ -37,17 +75,45 @@ async def require_service_principal(
         ) from exc
 
     except InvalidServiceTokenError as exc:
+        await record_security_access(
+            request=request,
+            principal_type=(SecurityPrincipalType.ANONYMOUS),
+            principal_id=None,
+            event=("service.token_authentication"),
+            outcome=(SecurityAccessOutcome.DENIED),
+            reason_code=("invalid_bearer_token"),
+        )
+
         raise HTTPException(
             status_code=(status.HTTP_401_UNAUTHORIZED),
-            detail=("Invalid bearer token."),
+            detail="Invalid bearer token.",
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
     except JwksUnavailableError as exc:
+        await record_security_access(
+            request=request,
+            principal_type=(SecurityPrincipalType.ANONYMOUS),
+            principal_id=None,
+            event=("service.token_authentication"),
+            outcome=(SecurityAccessOutcome.FAILURE),
+            reason_code=("jwks_unavailable"),
+        )
+
         raise HTTPException(
             status_code=(status.HTTP_503_SERVICE_UNAVAILABLE),
             detail=("Authentication service is unavailable."),
         ) from exc
+
+    await record_security_access(
+        request=request,
+        principal_type=(SecurityPrincipalType.INTEGRATION),
+        principal_id=principal.client_id,
+        event=("service.token_authentication"),
+        outcome=(SecurityAccessOutcome.SUCCESS),
+    )
+
+    return principal
 
 
 def _extract_bearer_token(
@@ -58,7 +124,7 @@ def _extract_bearer_token(
     if authorization is None:
         raise HTTPException(
             status_code=(status.HTTP_401_UNAUTHORIZED),
-            detail=("Bearer token is required."),
+            detail="Bearer token is required.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

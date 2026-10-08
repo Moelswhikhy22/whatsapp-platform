@@ -10,6 +10,7 @@ from app.db.models.conversation_assignment_history import (
 from app.db.models.customer_company import CustomerCompany
 from app.db.models.customer_contact import CustomerContact
 from app.db.models.employee import Employee
+from app.db.models.external_identity import ExternalIdentity
 from app.db.models.group import Group
 from app.db.models.group_membership import GroupMembership
 from app.db.models.integration import (
@@ -24,6 +25,17 @@ from app.db.models.message import (
     MessageType,
 )
 from app.db.models.message_status_event import MessageStatusEvent
+from app.db.models.outbox_event import (
+    OutboxEvent,
+    OutboxEventStatus,
+)
+from app.db.models.outgoing_webhook import (
+    OutgoingWebhookAttemptOutcome,
+    OutgoingWebhookDelivery,
+    OutgoingWebhookDeliveryAttempt,
+    OutgoingWebhookDeliveryStatus,
+    OutgoingWebhookSubscription,
+)
 from app.db.models.platform_audit_log import (
     PlatformAuditActorType,
     PlatformAuditLog,
@@ -32,6 +44,11 @@ from app.db.models.raw_webhook_event import (
     RawWebhookEvent,
     RawWebhookProcessingStatus,
     RawWebhookProvider,
+)
+from app.db.models.security_access_log import (
+    SecurityAccessLog,
+    SecurityAccessOutcome,
+    SecurityPrincipalType,
 )
 from app.db.models.template import (
     Template,
@@ -53,6 +70,7 @@ __all__ = [
     "CustomerCompany",
     "CustomerContact",
     "Employee",
+    "ExternalIdentity",
     "Group",
     "GroupMembership",
     "Integration",
@@ -63,11 +81,21 @@ __all__ = [
     "MessageStatus",
     "MessageStatusEvent",
     "MessageType",
+    "OutboxEvent",
+    "OutboxEventStatus",
+    "OutgoingWebhookAttemptOutcome",
+    "OutgoingWebhookDelivery",
+    "OutgoingWebhookDeliveryAttempt",
+    "OutgoingWebhookDeliveryStatus",
+    "OutgoingWebhookSubscription",
     "PlatformAuditActorType",
     "PlatformAuditLog",
     "RawWebhookEvent",
     "RawWebhookProcessingStatus",
     "RawWebhookProvider",
+    "SecurityAccessLog",
+    "SecurityAccessOutcome",
+    "SecurityPrincipalType",
     "Template",
     "TemplateStatus",
     "TemplateType",

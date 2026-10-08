@@ -6,6 +6,7 @@ from types import MappingProxyType
 from app.authorization.permissions import Permission
 from app.authorization.roles import Role
 
+
 ROLE_PERMISSIONS: Mapping[
     Role,
     frozenset[Permission],
@@ -72,7 +73,6 @@ ROLE_PERMISSIONS: Mapping[
                 Permission.TEMPLATE_UPDATE,
                 Permission.TEMPLATE_SEND,
                 Permission.MEDIA_READ,
-                Permission.AUDIT_READ,
             }
         ),
         Role.EMPLOYEE: frozenset(

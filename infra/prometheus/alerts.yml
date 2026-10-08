@@ -1,0 +1,77 @@
+groups:
+  - name: whatsapp-platform-rabbitmq
+    rules:
+      - alert: WhatsAppRabbitMQQueueMetricsUnavailable
+        expr: whatsapp_platform_rabbitmq_queue_metrics_collection_up == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: RabbitMQ queue metrics are unavailable
+          description: >-
+            The WhatsApp platform cannot read RabbitMQ queue
+            statistics.
+
+      - alert: WhatsAppRabbitMQMainQueueBacklogHigh
+        expr: >-
+          whatsapp_platform_rabbitmq_queue_messages_ready{
+            kind="main"
+          } > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: RabbitMQ main queue backlog is high
+          description: >-
+            Queue {{ $labels.queue }} has more than 100
+            ready messages for at least five minutes.
+
+      - alert: WhatsAppRabbitMQRetryQueueBacklogHigh
+        expr: >-
+          whatsapp_platform_rabbitmq_queue_messages_ready{
+            kind="retry"
+          } > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: RabbitMQ retry queue backlog is high
+          description: >-
+            Retry queue {{ $labels.queue }} has more than 50
+            messages waiting.
+
+      - alert: WhatsAppRabbitMQDeadLetterQueueNotEmpty
+        expr: >-
+          whatsapp_platform_rabbitmq_queue_messages_ready{
+            kind="dead"
+          } > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: RabbitMQ dead-letter queue contains messages
+          description: >-
+            Dead-letter queue {{ $labels.queue }} contains
+            messages requiring investigation.
+
+      - alert: WhatsAppRabbitMQQueueHasNoConsumers
+        expr: >-
+          (
+            whatsapp_platform_rabbitmq_queue_messages_ready{
+              kind="main"
+            } > 0
+          )
+          and on(queue, kind)
+          (
+            whatsapp_platform_rabbitmq_queue_consumers{
+              kind="main"
+            } == 0
+          )
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: RabbitMQ queue has backlog but no consumer
+          description: >-
+            Queue {{ $labels.queue }} contains work but has
+            no active consumers.
