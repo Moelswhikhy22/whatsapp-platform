@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from time import perf_counter
 from typing import cast
 from urllib.parse import quote
-from time import perf_counter
+
 import httpx
 
 from app.observability.external_metrics import (
@@ -125,6 +126,15 @@ class MetaCloudAPIClient:
             )
             raise
 
+        except Exception:
+            external_dependency_metrics.observe(
+                dependency="meta",
+                operation="send_text",
+                outcome="failure",
+                duration_seconds=(perf_counter() - started_at),
+            )
+            raise
+
         else:
             external_dependency_metrics.observe(
                 dependency="meta",
@@ -201,6 +211,15 @@ class MetaCloudAPIClient:
             )
             raise
 
+        except Exception:
+            external_dependency_metrics.observe(
+                dependency="meta",
+                operation="send_template",
+                outcome="failure",
+                duration_seconds=(perf_counter() - started_at),
+            )
+            raise
+
         else:
             external_dependency_metrics.observe(
                 dependency="meta",
@@ -210,10 +229,10 @@ class MetaCloudAPIClient:
             )
 
             return result
+
     async def _send_message(
         self,
         *,
-        operation: str,
         graph_api_version: str,
         phone_number_id: str,
         access_token: str,
@@ -228,79 +247,47 @@ class MetaCloudAPIClient:
 
         url = f"https://graph.facebook.com/{version}/{safe_phone_number_id}/messages"
 
-        started_at = perf_counter()
-
-        outcome = "failure"
-
         try:
-            try:
-                response = await self._http_client.post(
-                    url,
-                    headers={
-                        "Authorization": (f"Bearer {access_token}"),
-                        "Content-Type": ("application/json"),
-                    },
-                    json=payload,
-                )
-
-            except (
-                httpx.TimeoutException,
-                httpx.TransportError,
-            ) as exc:
-                raise (
-                    MetaCloudAPIRetryableError(("Meta Cloud API request failed transiently."))
-                ) from exc
-
-            response_payload = self._decode_json(response)
-
-            if response.status_code == 429 or response.status_code >= 500:
-                raise (
-                    MetaCloudAPIRetryableError(("Meta Cloud API returned a retryable HTTP status."))
-                )
-
-            meta_error_code = self._extract_error_code(response_payload)
-
-            if meta_error_code in _RETRYABLE_META_ERROR_CODES:
-                raise (
-                    MetaCloudAPIRetryableError(
-                        ("Meta Cloud API returned a retryable provider error.")
-                    )
-                )
-
-            if not response.is_success:
-                raise (
-                    MetaCloudAPIPermanentError(
-                        ("Meta Cloud API rejected the outbound message."),
-                        status_code=(response.status_code),
-                        meta_error_code=(meta_error_code),
-                    )
-                )
-
-            meta_message_id = self._extract_message_id(response_payload)
-
-            if meta_message_id is None:
-                raise (
-                    MetaCloudAPIAmbiguousResponseError(
-                        ("Meta returned success without a message ID.")
-                    )
-                )
-
-            outcome = "success"
-
-            return MetaSendMessageResult(
-                meta_message_id=(meta_message_id),
+            response = await self._http_client.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
             )
 
-        finally:
-            external_dependency_metrics.observe(
-                dependency="meta",
-                operation=operation,
-                outcome=outcome,
-                duration_seconds=max(
-                    perf_counter() - started_at,
-                    0.0,
-                ),
+        except (
+            httpx.TimeoutException,
+            httpx.TransportError,
+        ) as exc:
+            raise MetaCloudAPIRetryableError("Meta Cloud API request failed transiently.") from exc
+
+        response_payload = self._decode_json(response)
+
+        if response.status_code == 429 or response.status_code >= 500:
+            raise MetaCloudAPIRetryableError("Meta Cloud API returned a retryable HTTP status.")
+
+        meta_error_code = self._extract_error_code(response_payload)
+
+        if meta_error_code in _RETRYABLE_META_ERROR_CODES:
+            raise MetaCloudAPIRetryableError("Meta Cloud API returned a retryable provider error.")
+
+        if not response.is_success:
+            raise MetaCloudAPIPermanentError(
+                "Meta Cloud API rejected the outbound message.",
+                status_code=response.status_code,
+                meta_error_code=meta_error_code,
             )
+
+        meta_message_id = self._extract_message_id(response_payload)
+
+        if meta_message_id is None:
+            raise MetaCloudAPIAmbiguousResponseError("Meta returned success without a message ID.")
+
+        return MetaSendMessageResult(
+            meta_message_id=meta_message_id,
+        )
 
     @staticmethod
     def _validate_version(

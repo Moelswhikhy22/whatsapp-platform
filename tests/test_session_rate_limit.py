@@ -35,18 +35,13 @@ def _request(
         redis=redis,
     )
 
-    headers: list[
-        tuple[bytes, bytes]
-    ] = []
+    headers: list[tuple[bytes, bytes]] = []
 
     if session_id is not None:
         headers.append(
             (
                 b"cookie",
-                (
-                    f"{SESSION_COOKIE_NAME}="
-                    f"{session_id}"
-                ).encode(),
+                (f"{SESSION_COOKIE_NAME}={session_id}").encode(),
             )
         )
 
@@ -73,12 +68,10 @@ def _request(
 
 @pytest.mark.asyncio
 async def test_session_rate_limit_skips_anonymous_request() -> None:
-    response = (
-        await enforce_human_session_rate_limit(
-            _request(
-                session_id=None,
-                redis=None,
-            )
+    response = await enforce_human_session_rate_limit(
+        _request(
+            session_id=None,
+            redis=None,
         )
     )
 
@@ -87,13 +80,11 @@ async def test_session_rate_limit_skips_anonymous_request() -> None:
 
 @pytest.mark.asyncio
 async def test_session_rate_limit_skips_logout() -> None:
-    response = (
-        await enforce_human_session_rate_limit(
-            _request(
-                path="/auth/logout",
-                session_id="session-123",
-                redis=None,
-            )
+    response = await enforce_human_session_rate_limit(
+        _request(
+            path="/auth/logout",
+            session_id="session-123",
+            redis=None,
         )
     )
 
@@ -102,13 +93,11 @@ async def test_session_rate_limit_skips_logout() -> None:
 
 @pytest.mark.asyncio
 async def test_session_rate_limit_skips_auth_callback() -> None:
-    response = (
-        await enforce_human_session_rate_limit(
-            _request(
-                path="/auth/callback",
-                session_id="session-123",
-                redis=None,
-            )
+    response = await enforce_human_session_rate_limit(
+        _request(
+            path="/auth/callback",
+            session_id="session-123",
+            redis=None,
         )
     )
 
@@ -117,12 +106,10 @@ async def test_session_rate_limit_skips_auth_callback() -> None:
 
 @pytest.mark.asyncio
 async def test_session_rate_limit_fails_closed_for_api_when_redis_missing() -> None:
-    response = (
-        await enforce_human_session_rate_limit(
-            _request(
-                session_id="session-123",
-                redis=None,
-            )
+    response = await enforce_human_session_rate_limit(
+        _request(
+            session_id="session-123",
+            redis=None,
         )
     )
 
@@ -149,23 +136,18 @@ async def test_session_rate_limit_returns_429_when_exceeded(
         check,
     )
 
-    response = (
-        await enforce_human_session_rate_limit(
-            _request(
-                session_id="session-123",
-                redis=MagicMock(
-                    spec=Redis,
-                ),
-            )
+    response = await enforce_human_session_rate_limit(
+        _request(
+            session_id="session-123",
+            redis=MagicMock(
+                spec=Redis,
+            ),
         )
     )
 
     assert response is not None
     assert response.status_code == 429
-    assert (
-        response.headers["retry-after"]
-        == "9"
-    )
+    assert response.headers["retry-after"] == "9"
 
 
 @pytest.mark.asyncio
@@ -181,19 +163,12 @@ async def test_session_rate_limiter_does_not_expose_session_id_in_key() -> None:
         ]
     )
 
-    await HumanSessionRateLimiter(
-        redis
-    ).check(
+    await HumanSessionRateLimiter(redis).check(
         session_id="super-secret-session-id",
     )
 
     key = redis.eval.await_args.args[2]
 
-    assert (
-        "super-secret-session-id"
-        not in key
-    )
+    assert "super-secret-session-id" not in key
 
-    assert key.startswith(
-        "global:rate_limit:human_session:"
-    )
+    assert key.startswith("global:rate_limit:human_session:")

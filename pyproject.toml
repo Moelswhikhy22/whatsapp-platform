@@ -8,6 +8,7 @@ dependencies = [
     "aio-pika>=10.1.0",
     "aioboto3>=15.5.0",
     "alembic>=1.20.0",
+    "asyncpg>=0.32.0",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.142.2",
     "httpx>=0.28.1",
     "hvac>=2.4.0",

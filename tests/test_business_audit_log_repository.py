@@ -74,15 +74,15 @@ def test_business_audit_repository_redacts_nested_secrets() -> None:
     assert config["provider"] == "meta"
 
     session.add.assert_called_once_with(audit_log)
+
+
 def test_outgoing_webhook_created_audit_contains_no_secret() -> None:
     tenant_id = uuid4()
 
     tenant = TenantContext(
         tenant_id=tenant_id,
         slug="audit-webhook-test",
-        source=(
-            TenantContextSource.AUTHENTICATED_SESSION
-        ),
+        source=(TenantContextSource.AUTHENTICATED_SESSION),
     )
 
     session = MagicMock(
@@ -96,31 +96,22 @@ def test_outgoing_webhook_created_audit_contains_no_secret() -> None:
 
     subscription_id = uuid4()
 
-    audit = (
-        repository
-        .add_outgoing_webhook_created(
-            subscription_id=subscription_id,
-            actor_id="tenant-admin",
-            trace_id="trace-webhook-create",
-            name="ERP Hook",
-            event_types=[
-                "message.received",
-                "message.sent",
-            ],
-        )
+    audit = repository.add_outgoing_webhook_created(
+        subscription_id=subscription_id,
+        actor_id="tenant-admin",
+        trace_id="trace-webhook-create",
+        name="ERP Hook",
+        event_types=[
+            "message.received",
+            "message.sent",
+        ],
     )
 
-    assert audit.action == (
-        "webhook.subscription_created"
-    )
+    assert audit.action == ("webhook.subscription_created")
 
-    assert audit.resource_type == (
-        "outgoing_webhook_subscription"
-    )
+    assert audit.resource_type == ("outgoing_webhook_subscription")
 
-    assert audit.resource_id == str(
-        subscription_id
-    )
+    assert audit.resource_id == str(subscription_id)
 
     assert audit.before_json is None
 
@@ -134,14 +125,9 @@ def test_outgoing_webhook_created_audit_contains_no_secret() -> None:
         "signing_secret_configured": True,
     }
 
-    serialized = str(
-        audit.after_json
-    ).lower()
+    serialized = str(audit.after_json).lower()
 
-    assert (
-        "signing_secret_configured"
-        in serialized
-    )
+    assert "signing_secret_configured" in serialized
 
     assert ("s" * 32) not in serialized
     assert "access_token" not in serialized

@@ -10,9 +10,7 @@ TESTS = ROOT / "tests"
 
 
 def _relative(path: Path) -> str:
-    return str(
-        path.relative_to(ROOT)
-    ).replace("\\", "/")
+    return str(path.relative_to(ROOT)).replace("\\", "/")
 
 
 def _search_files(
@@ -29,10 +27,7 @@ def _search_files(
         except UnicodeDecodeError:
             continue
 
-        if any(
-            needle in content
-            for needle in needles
-        ):
+        if any(needle in content for needle in needles):
             matches.append(path)
 
     return sorted(matches)
@@ -42,15 +37,9 @@ def _show_file(
     path: Path,
 ) -> None:
     print()
-    print(
-        "=" * 80
-    )
-    print(
-        _relative(path)
-    )
-    print(
-        "=" * 80
-    )
+    print("=" * 80)
+    print(_relative(path))
+    print("=" * 80)
 
     print(
         path.read_text(
@@ -64,20 +53,14 @@ def _show_matches(
     paths: list[Path],
 ) -> None:
     print()
-    print(
-        f"### {title}"
-    )
+    print(f"### {title}")
 
     if not paths:
-        print(
-            "NONE"
-        )
+        print("NONE")
         return
 
     for path in paths:
-        print(
-            f"- {_relative(path)}"
-        )
+        print(f"- {_relative(path)}")
 
 
 def inspect_media() -> None:
@@ -105,21 +88,16 @@ def inspect_media() -> None:
             encoding="utf-8",
         )
 
-        if (
-            "media.process" in content
-            or (
-                "provider_media_id" in content
-                and (
-                    "MediaObject" in content
-                    or "put_object" in content
-                    or "upload" in content
-                    or "download" in content
-                )
+        if "media.process" in content or (
+            "provider_media_id" in content
+            and (
+                "MediaObject" in content
+                or "put_object" in content
+                or "upload" in content
+                or "download" in content
             )
         ):
-            likely_worker_files.append(
-                path
-            )
+            likely_worker_files.append(path)
 
     _show_matches(
         "LIKELY MEDIA PROCESSING FILES",
@@ -149,12 +127,7 @@ def inspect_cookie_security() -> None:
     )
 
     for path in cookie_files:
-        if (
-            "/auth/" in _relative(path)
-            or _relative(path).endswith(
-                "app/api/auth.py"
-            )
-        ):
+        if "/auth/" in _relative(path) or _relative(path).endswith("app/api/auth.py"):
             _show_file(path)
 
 
@@ -162,23 +135,14 @@ def inspect_presigned_url_logging() -> None:
     suspicious_files: list[Path] = []
 
     for path in APP.rglob("*.py"):
-        content = path.read_text(
-            encoding="utf-8"
-        )
+        content = path.read_text(encoding="utf-8")
 
         lower = content.lower()
 
-        if (
-            "presigned" in lower
-            and (
-                "logger." in lower
-                or "logging." in lower
-                or "print(" in lower
-            )
+        if "presigned" in lower and (
+            "logger." in lower or "logging." in lower or "print(" in lower
         ):
-            suspicious_files.append(
-                path
-            )
+            suspicious_files.append(path)
 
     _show_matches(
         "POTENTIAL PRESIGNED URL LOGGING",
@@ -188,30 +152,18 @@ def inspect_presigned_url_logging() -> None:
 
 def inspect_env_files() -> None:
     print()
-    print(
-        "### ENV FILES"
-    )
+    print("### ENV FILES")
 
-    env_files = sorted(
-        path
-        for path in ROOT.glob(".env*")
-        if path.is_file()
-    )
+    env_files = sorted(path for path in ROOT.glob(".env*") if path.is_file())
 
     if not env_files:
-        print(
-            "NONE"
-        )
+        print("NONE")
         return
 
     for path in env_files:
-        print(
-            f"- {_relative(path)}"
-        )
+        print(f"- {_relative(path)}")
 
-        if path.name.endswith(
-            ".example"
-        ):
+        if path.name.endswith(".example"):
             _show_file(path)
 
 
@@ -226,9 +178,7 @@ def inspect_tenant_secret_env_usage() -> None:
         "TENANT_SECRET",
     )
 
-    matches: list[
-        tuple[Path, str]
-    ] = []
+    matches: list[tuple[Path, str]] = []
 
     for path in APP.rglob("*.py"):
         content = path.read_text(
@@ -245,21 +195,14 @@ def inspect_tenant_secret_env_usage() -> None:
                 )
 
     print()
-    print(
-        "### TENANT SECRET ENV USAGE"
-    )
+    print("### TENANT SECRET ENV USAGE")
 
     if not matches:
-        print(
-            "NONE"
-        )
+        print("NONE")
         return
 
     for path, term in matches:
-        print(
-            f"- {_relative(path)}: "
-            f"{term}"
-        )
+        print(f"- {_relative(path)}: {term}")
 
 
 def inspect_security_tests() -> None:
@@ -282,12 +225,8 @@ def inspect_security_tests() -> None:
 
 
 def main() -> None:
-    print(
-        "SECTION 25B SECURITY INSPECTION"
-    )
-    print(
-        f"Project root: {ROOT}"
-    )
+    print("SECTION 25B SECURITY INSPECTION")
+    print(f"Project root: {ROOT}")
 
     inspect_media()
     inspect_cookie_security()

@@ -41,11 +41,7 @@ class ApiMetrics:
         *,
         registry: CollectorRegistry | None = None,
     ) -> None:
-        self._registry = (
-            registry
-            if registry is not None
-            else CollectorRegistry()
-        )
+        self._registry = registry if registry is not None else CollectorRegistry()
 
         self._requests = Counter(
             "http_requests",
@@ -86,13 +82,9 @@ class ApiMetrics:
             "status": str(status_code),
         }
 
-        self._requests.labels(
-            **labels
-        ).inc()
+        self._requests.labels(**labels).inc()
 
-        self._request_duration.labels(
-            **labels
-        ).observe(
+        self._request_duration.labels(**labels).observe(
             max(
                 duration_seconds,
                 0.0,
@@ -100,9 +92,7 @@ class ApiMetrics:
         )
 
     def render_latest(self) -> bytes:
-        return generate_latest(
-            self._registry
-        )
+        return generate_latest(self._registry)
 
 
 class InfrastructureMetrics:
@@ -111,31 +101,19 @@ class InfrastructureMetrics:
         *,
         registry: CollectorRegistry | None = None,
     ) -> None:
-        self._registry = (
-            registry
-            if registry is not None
-            else CollectorRegistry()
-        )
+        self._registry = registry if registry is not None else CollectorRegistry()
 
         self._dependency_up = Gauge(
             "dependency_up",
-            (
-                "Whether an infrastructure "
-                "dependency is currently healthy."
-            ),
-            labelnames=(
-                "dependency",
-            ),
+            ("Whether an infrastructure dependency is currently healthy."),
+            labelnames=("dependency",),
             namespace="whatsapp_platform",
             registry=self._registry,
         )
 
         self._dependency_checks = Counter(
             "dependency_health_checks",
-            (
-                "Infrastructure dependency "
-                "health-check results."
-            ),
+            ("Infrastructure dependency health-check results."),
             labelnames=(
                 "dependency",
                 "outcome",
@@ -147,19 +125,14 @@ class InfrastructureMetrics:
         self._readiness_checks = Counter(
             "readiness_checks",
             "Application readiness checks.",
-            labelnames=(
-                "status",
-            ),
+            labelnames=("status",),
             namespace="whatsapp_platform",
             registry=self._registry,
         )
 
         self._readiness_duration = Histogram(
             "readiness_check_duration_seconds",
-            (
-                "Duration of application "
-                "readiness checks."
-            ),
+            ("Duration of application readiness checks."),
             namespace="whatsapp_platform",
             buckets=_READINESS_LATENCY_BUCKETS,
             registry=self._registry,
@@ -178,22 +151,14 @@ class InfrastructureMetrics:
             "rabbitmq": rabbitmq,
         }
 
-        for dependency, healthy in (
-            dependencies.items()
-        ):
+        for dependency, healthy in dependencies.items():
             self._dependency_up.labels(
                 dependency=dependency,
-            ).set(
-                1 if healthy else 0
-            )
+            ).set(1 if healthy else 0)
 
             self._dependency_checks.labels(
                 dependency=dependency,
-                outcome=(
-                    "up"
-                    if healthy
-                    else "down"
-                ),
+                outcome=("up" if healthy else "down"),
             ).inc()
 
     def observe_readiness(
@@ -214,9 +179,7 @@ class InfrastructureMetrics:
         )
 
     def render_latest(self) -> bytes:
-        return generate_latest(
-            self._registry
-        )
+        return generate_latest(self._registry)
 
 
 class RabbitMQQueueMetrics:
@@ -225,18 +188,11 @@ class RabbitMQQueueMetrics:
         *,
         registry: CollectorRegistry | None = None,
     ) -> None:
-        self._registry = (
-            registry
-            if registry is not None
-            else CollectorRegistry()
-        )
+        self._registry = registry if registry is not None else CollectorRegistry()
 
         self._messages = Gauge(
             "rabbitmq_queue_messages",
-            (
-                "Current number of ready "
-                "messages in a RabbitMQ queue."
-            ),
+            ("Current number of ready messages in a RabbitMQ queue."),
             labelnames=(
                 "queue",
                 "kind",
@@ -247,10 +203,7 @@ class RabbitMQQueueMetrics:
 
         self._consumers = Gauge(
             "rabbitmq_queue_consumers",
-            (
-                "Current number of consumers "
-                "attached to a RabbitMQ queue."
-            ),
+            ("Current number of consumers attached to a RabbitMQ queue."),
             labelnames=(
                 "queue",
                 "kind",
@@ -261,10 +214,7 @@ class RabbitMQQueueMetrics:
 
         self._depth_alert = Gauge(
             "rabbitmq_queue_depth_alert",
-            (
-                "Whether a queue depth "
-                "threshold is currently exceeded."
-            ),
+            ("Whether a queue depth threshold is currently exceeded."),
             labelnames=(
                 "queue",
                 "kind",
@@ -276,20 +226,14 @@ class RabbitMQQueueMetrics:
 
         self._collection_up = Gauge(
             "rabbitmq_queue_collection_up",
-            (
-                "Whether the latest RabbitMQ "
-                "queue metrics collection succeeded."
-            ),
+            ("Whether the latest RabbitMQ queue metrics collection succeeded."),
             namespace="whatsapp_platform",
             registry=self._registry,
         )
 
         self._collection_failures = Counter(
             "rabbitmq_queue_collection_failures",
-            (
-                "Total RabbitMQ queue metrics "
-                "collection failures."
-            ),
+            ("Total RabbitMQ queue metrics collection failures."),
             namespace="whatsapp_platform",
             registry=self._registry,
         )
@@ -309,84 +253,44 @@ class RabbitMQQueueMetrics:
             "kind": kind,
         }
 
-        self._messages.labels(
-            **labels
-        ).set(
-            message_count
-        )
+        self._messages.labels(**labels).set(message_count)
 
-        self._consumers.labels(
-            **labels
-        ).set(
-            consumer_count
-        )
+        self._consumers.labels(**labels).set(consumer_count)
 
         self._depth_alert.labels(
             **labels,
             severity="warning",
-        ).set(
-            (
-                1
-                if message_count
-                >= warning_threshold
-                else 0
-            )
-        )
+        ).set((1 if message_count >= warning_threshold else 0))
 
         self._depth_alert.labels(
             **labels,
             severity="critical",
-        ).set(
-            (
-                1
-                if message_count
-                >= critical_threshold
-                else 0
-            )
-        )
+        ).set((1 if message_count >= critical_threshold else 0))
 
     def observe_collection_success(
         self,
     ) -> None:
-        self._collection_up.set(
-            1
-        )
+        self._collection_up.set(1)
 
     def observe_collection_failure(
         self,
     ) -> None:
-        self._collection_up.set(
-            0
-        )
+        self._collection_up.set(0)
 
         self._collection_failures.inc()
 
     def render_latest(self) -> bytes:
-        return generate_latest(
-            self._registry
-        )
+        return generate_latest(self._registry)
 
 
 metrics_registry = CollectorRegistry()
 
-api_metrics = ApiMetrics(
-    registry=metrics_registry
-)
+api_metrics = ApiMetrics(registry=metrics_registry)
 
-infrastructure_metrics = (
-    InfrastructureMetrics(
-        registry=metrics_registry
-    )
-)
+infrastructure_metrics = InfrastructureMetrics(registry=metrics_registry)
 
-rabbitmq_queue_metrics = (
-    RabbitMQQueueMetrics(
-        registry=metrics_registry
-    )
-)
+rabbitmq_queue_metrics = RabbitMQQueueMetrics(registry=metrics_registry)
 
 
 def render_latest_metrics() -> bytes:
-    return generate_latest(
-        metrics_registry
-    )
+    return generate_latest(metrics_registry)

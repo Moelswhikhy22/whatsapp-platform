@@ -43,9 +43,7 @@ async def metrics(
     return Response(
         content=render_latest_metrics(),
         headers={
-            "Content-Type": (
-                CONTENT_TYPE_LATEST
-            ),
+            "Content-Type": (CONTENT_TYPE_LATEST),
             "Cache-Control": "no-store",
         },
     )

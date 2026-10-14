@@ -18,9 +18,7 @@ pytestmark = pytest.mark.integration
 
 @pytest.mark.asyncio
 async def test_audit_tables_have_immutability_triggers() -> None:
-    engine = create_async_engine(
-        os.environ["TEST_DATABASE_URL"]
-    )
+    engine = create_async_engine(os.environ["TEST_DATABASE_URL"])
 
     try:
         async with engine.connect() as connection:
@@ -40,10 +38,7 @@ async def test_audit_tables_have_immutability_triggers() -> None:
                 )
             )
 
-            trigger_names = {
-                row[0]
-                for row in result
-            }
+            trigger_names = {row[0] for row in result}
 
         assert trigger_names == {
             "trg_business_audit_logs_immutable",
@@ -57,17 +52,13 @@ async def test_audit_tables_have_immutability_triggers() -> None:
 
 @pytest.mark.asyncio
 async def test_platform_audit_row_cannot_be_updated_or_deleted() -> None:
-    engine = create_async_engine(
-        os.environ["TEST_DATABASE_URL"]
-    )
+    engine = create_async_engine(os.environ["TEST_DATABASE_URL"])
 
     audit_id = uuid4()
 
     try:
         async with engine.connect() as connection:
-            transaction = (
-                await connection.begin()
-            )
+            transaction = await connection.begin()
 
             try:
                 await connection.execute(
@@ -91,20 +82,13 @@ async def test_platform_audit_row_cannot_be_updated_or_deleted() -> None:
                     ),
                     {
                         "id": audit_id,
-                        "trace_id": (
-                            uuid4().hex
-                        ),
+                        "trace_id": (uuid4().hex),
                     },
                 )
 
-                update_savepoint = (
-                    await connection
-                    .begin_nested()
-                )
+                update_savepoint = await connection.begin_nested()
 
-                with pytest.raises(
-                    DBAPIError
-                ):
+                with pytest.raises(DBAPIError):
                     await connection.execute(
                         text(
                             """
@@ -118,18 +102,11 @@ async def test_platform_audit_row_cannot_be_updated_or_deleted() -> None:
                         },
                     )
 
-                await (
-                    update_savepoint.rollback()
-                )
+                await update_savepoint.rollback()
 
-                delete_savepoint = (
-                    await connection
-                    .begin_nested()
-                )
+                delete_savepoint = await connection.begin_nested()
 
-                with pytest.raises(
-                    DBAPIError
-                ):
+                with pytest.raises(DBAPIError):
                     await connection.execute(
                         text(
                             """
@@ -142,9 +119,7 @@ async def test_platform_audit_row_cannot_be_updated_or_deleted() -> None:
                         },
                     )
 
-                await (
-                    delete_savepoint.rollback()
-                )
+                await delete_savepoint.rollback()
 
             finally:
                 await transaction.rollback()

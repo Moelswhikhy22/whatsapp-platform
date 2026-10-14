@@ -12,9 +12,6 @@ import httpx
 from app.observability.external_metrics import (
     external_dependency_metrics,
 )
-from app.observability.external_metrics import (
-    observe_external_operation,
-)
 
 _GRAPH_VERSION_PATTERN = re.compile(r"^v\d+\.\d+$")
 
@@ -53,12 +50,6 @@ class MetaMediaAPIClient:
     ) -> None:
         self._http_client = http_client
 
-    @observe_external_operation(
-        dependency="meta",
-        retryable_errors=(MetaMediaAPIRetryableError,),
-        permanent_errors=(MetaMediaAPIPermanentError,),
-        ignored_errors=(ValueError,),
-    )
     async def download_media(
         self,
         *,
@@ -68,38 +59,40 @@ class MetaMediaAPIClient:
         access_token: str,
         max_size_bytes: int | None = None,
     ) -> MetaDownloadedMedia:
-        if max_size_bytes is not None and max_size_bytes <= 0:
-            raise ValueError(("max_size_bytes must be greater than zero."))
-
-        version = self._validate_version(graph_api_version)
-
-        media_id = provider_media_id.strip()
-
-        if not media_id:
-            raise (MetaMediaAPIPermanentError("Meta media ID is empty."))
-
-        phone_id = phone_number_id.strip()
-
-        if not phone_id:
-            raise (MetaMediaAPIPermanentError(("Meta phone number ID is empty.")))
-
         started_at = perf_counter()
 
         try:
+            if max_size_bytes is not None and max_size_bytes <= 0:
+                raise ValueError("max_size_bytes must be greater than zero.")
+
+            version = self._validate_version(graph_api_version)
+
+            media_id = provider_media_id.strip()
+
+            if not media_id:
+                raise MetaMediaAPIPermanentError("Meta media ID is empty.")
+
+            phone_id = phone_number_id.strip()
+
+            if not phone_id:
+                raise MetaMediaAPIPermanentError("Meta phone number ID is empty.")
+
             result = await self._download_validated_media(
                 version=version,
                 media_id=media_id,
                 phone_id=phone_id,
-                access_token=(access_token),
-                max_size_bytes=(max_size_bytes),
+                access_token=access_token,
+                max_size_bytes=max_size_bytes,
             )
+
+        except ValueError:
+            raise
 
         except MetaMediaAPIRetryableError:
             self._observe(
                 outcome="retryable_failure",
                 started_at=started_at,
             )
-
             raise
 
         except MetaMediaAPIPermanentError:
@@ -107,7 +100,13 @@ class MetaMediaAPIClient:
                 outcome="permanent_failure",
                 started_at=started_at,
             )
+            raise
 
+        except Exception:
+            self._observe(
+                outcome="failure",
+                started_at=started_at,
+            )
             raise
 
         self._observe(
@@ -251,6 +250,7 @@ class MetaMediaAPIClient:
     ) -> None:
         external_dependency_metrics.observe(
             dependency="meta",
+            operation="download_media",
             outcome=outcome,
             duration_seconds=max(
                 perf_counter() - started_at,

@@ -26,16 +26,9 @@ def _ensure_import(
     index = content.find(marker)
 
     if index == -1:
-        raise RuntimeError(
-            f"Could not find an app import insertion point for: {import_line}"
-        )
+        raise RuntimeError(f"Could not find an app import insertion point for: {import_line}")
 
-    return (
-        content[: index + 1]
-        + import_line
-        + "\n"
-        + content[index + 1 :]
-    )
+    return content[: index + 1] + import_line + "\n" + content[index + 1 :]
 
 
 def _ensure_route_dependency(
@@ -50,9 +43,7 @@ def _ensure_route_dependency(
     function_index = content.find(function_marker)
 
     if function_index == -1:
-        raise RuntimeError(
-            f"Could not find endpoint function {function_name!r}."
-        )
+        raise RuntimeError(f"Could not find endpoint function {function_name!r}.")
 
     route_literal_double = f'"{route_path}"'
     route_literal_single = f"'{route_path}'"
@@ -64,26 +55,16 @@ def _ensure_route_dependency(
     )
 
     if route_index == -1:
+        raise RuntimeError(f"Could not find @{method} decorator for {function_name!r}.")
+
+    decorator_text = content[route_index:function_index]
+
+    if route_literal_double not in decorator_text and route_literal_single not in decorator_text:
         raise RuntimeError(
-            f"Could not find @{method} decorator for {function_name!r}."
+            f"Decorator for {function_name!r} does not contain expected route {route_path!r}."
         )
 
-    decorator_text = content[
-        route_index:function_index
-    ]
-
-    if (
-        route_literal_double not in decorator_text
-        and route_literal_single not in decorator_text
-    ):
-        raise RuntimeError(
-            f"Decorator for {function_name!r} does not contain "
-            f"expected route {route_path!r}."
-        )
-
-    dependency_expression = (
-        f"Depends({dependency_name})"
-    )
+    dependency_expression = f"Depends({dependency_name})"
 
     if dependency_expression in decorator_text:
         return content
@@ -91,23 +72,13 @@ def _ensure_route_dependency(
     closing = decorator_text.rfind(")\n")
 
     if closing == -1:
-        raise RuntimeError(
-            f"Could not locate decorator closing for {function_name!r}."
-        )
+        raise RuntimeError(f"Could not locate decorator closing for {function_name!r}.")
 
     insert_at = route_index + closing
 
-    insertion = (
-        "    dependencies=[\n"
-        f"        Depends({dependency_name}),\n"
-        "    ],\n"
-    )
+    insertion = f"    dependencies=[\n        Depends({dependency_name}),\n    ],\n"
 
-    return (
-        content[:insert_at]
-        + insertion
-        + content[insert_at:]
-    )
+    return content[:insert_at] + insertion + content[insert_at:]
 
 
 def patch_media() -> None:
@@ -122,10 +93,7 @@ def patch_media() -> None:
     content = _ensure_route_dependency(
         content=content,
         method="get",
-        route_path=(
-            "/messages/{message_id}/media/"
-            "{media_id}/url"
-        ),
+        route_path=("/messages/{message_id}/media/{media_id}/url"),
         function_name="get_media_url",
         dependency_name="require_media_url_rate_limit",
     )
@@ -139,22 +107,15 @@ def patch_integration_validation() -> None:
 
     content = _ensure_import(
         content,
-        (
-            "from app.api.rate_limits import "
-            "require_integration_admin_rate_limit"
-        ),
+        ("from app.api.rate_limits import require_integration_admin_rate_limit"),
     )
 
     content = _ensure_route_dependency(
         content=content,
         method="post",
-        route_path=(
-            "/integrations/{integration_id}/validate"
-        ),
+        route_path=("/integrations/{integration_id}/validate"),
         function_name="validate_integration",
-        dependency_name=(
-            "require_integration_admin_rate_limit"
-        ),
+        dependency_name=("require_integration_admin_rate_limit"),
     )
 
     _write(path, content)
@@ -166,17 +127,11 @@ def patch_router() -> None:
 
     content = _ensure_import(
         content,
-        (
-            "from app.api.v1.media import "
-            "router as media_router"
-        ),
+        ("from app.api.v1.media import router as media_router"),
     )
     content = _ensure_import(
         content,
-        (
-            "from app.api.v1.integration_validation import "
-            "router as integration_validation_router"
-        ),
+        ("from app.api.v1.integration_validation import router as integration_validation_router"),
     )
 
     # Remove the temporary wrapper-router wiring from the previous
@@ -230,18 +185,10 @@ def patch_router() -> None:
     additions: list[str] = []
 
     if not direct_media_pattern.search(content):
-        additions.append(
-            "api_router.include_router(\n"
-            "    media_router,\n"
-            ")\n"
-        )
+        additions.append("api_router.include_router(\n    media_router,\n)\n")
 
     if not direct_validation_pattern.search(content):
-        additions.append(
-            "api_router.include_router(\n"
-            "    integration_validation_router,\n"
-            ")\n"
-        )
+        additions.append("api_router.include_router(\n    integration_validation_router,\n)\n")
 
     if additions:
         content = content.rstrip() + "\n\n" + "\n".join(additions)
@@ -256,9 +203,7 @@ def main() -> None:
 
     print("24B safe patch applied.")
     print(
-        "Modified: app/api/v1/media.py, "
-        "app/api/v1/integration_validation.py, "
-        "app/api/v1/router.py"
+        "Modified: app/api/v1/media.py, app/api/v1/integration_validation.py, app/api/v1/router.py"
     )
 
 

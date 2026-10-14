@@ -22,9 +22,7 @@ from app.session_rate_limit import (
 def _is_rate_limited_api_path(
     request: Request,
 ) -> bool:
-    return request.url.path.startswith(
-        "/api/"
-    )
+    return request.url.path.startswith("/api/")
 
 
 async def enforce_human_session_rate_limit(
@@ -33,14 +31,10 @@ async def enforce_human_session_rate_limit(
     # Auth endpoints such as /auth/logout must remain
     # reachable even when Redis rate-limit protection
     # is unavailable. They do not grant authorization.
-    if not _is_rate_limited_api_path(
-        request
-    ):
+    if not _is_rate_limited_api_path(request):
         return None
 
-    session_id = request.cookies.get(
-        SESSION_COOKIE_NAME
-    )
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
 
     if not session_id:
         return None
@@ -55,9 +49,7 @@ async def enforce_human_session_rate_limit(
         return _backend_unavailable_response()
 
     try:
-        decision = await HumanSessionRateLimiter(
-            redis
-        ).check(
+        decision = await HumanSessionRateLimiter(redis).check(
             session_id=session_id,
         )
     except (
@@ -77,17 +69,11 @@ async def enforce_human_session_rate_limit(
                 "message": "Too many session requests.",
             }
         },
-        headers={
-            "Retry-After": str(
-                decision.retry_after_seconds
-            )
-        },
+        headers={"Retry-After": str(decision.retry_after_seconds)},
     )
 
 
-class HumanSessionRateLimitMiddleware(
-    BaseHTTPMiddleware
-):
+class HumanSessionRateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self,
         request: Request,
@@ -96,18 +82,12 @@ class HumanSessionRateLimitMiddleware(
             Awaitable[Response],
         ],
     ) -> Response:
-        limited_response = (
-            await enforce_human_session_rate_limit(
-                request
-            )
-        )
+        limited_response = await enforce_human_session_rate_limit(request)
 
         if limited_response is not None:
             return limited_response
 
-        return await call_next(
-            request
-        )
+        return await call_next(request)
 
 
 def _backend_unavailable_response() -> JSONResponse:
@@ -115,13 +95,8 @@ def _backend_unavailable_response() -> JSONResponse:
         status_code=503,
         content={
             "detail": {
-                "code": (
-                    "SESSION_RATE_LIMIT_BACKEND_UNAVAILABLE"
-                ),
-                "message": (
-                    "Session protection service "
-                    "is unavailable."
-                ),
+                "code": ("SESSION_RATE_LIMIT_BACKEND_UNAVAILABLE"),
+                "message": ("Session protection service is unavailable."),
             }
         },
     )

@@ -119,7 +119,7 @@ async def test_meta_send_records_failure(
 
     assert kwargs["operation"] == "send_text"
 
-    assert kwargs["outcome"] == "failure"
+    assert kwargs["outcome"] == "retryable_failure"
 
 
 @pytest.mark.asyncio
@@ -177,29 +177,36 @@ async def test_meta_media_records_metadata_and_download(
 
     assert result.data == b"abc"
 
-    assert observe.call_count == 2
+    assert observe.call_count == 3
 
-    first = observe.call_args_list[0].kwargs
+    metadata = observe.call_args_list[0].kwargs
+    download = observe.call_args_list[1].kwargs
+    high_level = observe.call_args_list[2].kwargs
 
-    second = observe.call_args_list[1].kwargs
-
-    assert first == {
+    assert metadata == {
         "dependency": "meta",
-        "operation": ("media_metadata"),
+        "operation": "media_metadata",
         "outcome": "success",
-        "duration_seconds": (first["duration_seconds"]),
+        "duration_seconds": metadata["duration_seconds"],
     }
 
-    assert second == {
+    assert download == {
         "dependency": "meta",
-        "operation": ("media_download"),
+        "operation": "media_download",
         "outcome": "success",
-        "duration_seconds": (second["duration_seconds"]),
+        "duration_seconds": download["duration_seconds"],
     }
 
-    assert first["duration_seconds"] >= 0
+    assert high_level == {
+        "dependency": "meta",
+        "operation": "download_media",
+        "outcome": "success",
+        "duration_seconds": high_level["duration_seconds"],
+    }
 
-    assert second["duration_seconds"] >= 0
+    assert metadata["duration_seconds"] >= 0
+    assert download["duration_seconds"] >= 0
+    assert high_level["duration_seconds"] >= 0
 
 
 @pytest.mark.asyncio
@@ -239,12 +246,15 @@ async def test_meta_media_records_metadata_failure(
                 access_token=("secret-token"),
             )
 
-    observe.assert_called_once()
+    assert observe.call_count == 2
 
-    kwargs = observe.call_args.kwargs
+    metadata = observe.call_args_list[0].kwargs
+    high_level = observe.call_args_list[1].kwargs
 
-    assert kwargs["dependency"] == "meta"
+    assert metadata["dependency"] == "meta"
+    assert metadata["operation"] == "media_metadata"
+    assert metadata["outcome"] == "failure"
 
-    assert kwargs["operation"] == "media_metadata"
-
-    assert kwargs["outcome"] == "failure"
+    assert high_level["dependency"] == "meta"
+    assert high_level["operation"] == "download_media"
+    assert high_level["outcome"] == "retryable_failure"

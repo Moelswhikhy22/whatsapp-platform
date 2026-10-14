@@ -1,0 +1,387 @@
+--- a/app/integrations/meta/client.py
++++ b/app/integrations/meta/client.py
+@@ -2,9 +2,10 @@
+ 
+ import re
+ from dataclasses import dataclass
++from time import perf_counter
+ from typing import cast
+ from urllib.parse import quote
+-from time import perf_counter
++
+ import httpx
+ 
+ from app.observability.external_metrics import (
+@@ -125,6 +126,15 @@
+             )
+             raise
+ 
++        except Exception:
++            external_dependency_metrics.observe(
++                dependency="meta",
++                operation="send_text",
++                outcome="failure",
++                duration_seconds=(perf_counter() - started_at),
++            )
++            raise
++
+         else:
+             external_dependency_metrics.observe(
+                 dependency="meta",
+@@ -201,6 +211,15 @@
+             )
+             raise
+ 
++        except Exception:
++            external_dependency_metrics.observe(
++                dependency="meta",
++                operation="send_template",
++                outcome="failure",
++                duration_seconds=(perf_counter() - started_at),
++            )
++            raise
++
+         else:
+             external_dependency_metrics.observe(
+                 dependency="meta",
+@@ -213,7 +232,6 @@
+     async def _send_message(
+         self,
+         *,
+-        operation: str,
+         graph_api_version: str,
+         phone_number_id: str,
+         access_token: str,
+@@ -228,79 +246,56 @@
+ 
+         url = f"https://graph.facebook.com/{version}/{safe_phone_number_id}/messages"
+ 
+-        started_at = perf_counter()
+-
+-        outcome = "failure"
+-
+         try:
+-            try:
+-                response = await self._http_client.post(
+-                    url,
+-                    headers={
+-                        "Authorization": (f"Bearer {access_token}"),
+-                        "Content-Type": ("application/json"),
+-                    },
+-                    json=payload,
+-                )
+-
+-            except (
+-                httpx.TimeoutException,
+-                httpx.TransportError,
+-            ) as exc:
+-                raise (
+-                    MetaCloudAPIRetryableError(("Meta Cloud API request failed transiently."))
+-                ) from exc
+-
+-            response_payload = self._decode_json(response)
+-
+-            if response.status_code == 429 or response.status_code >= 500:
+-                raise (
+-                    MetaCloudAPIRetryableError(("Meta Cloud API returned a retryable HTTP status."))
+-                )
+-
+-            meta_error_code = self._extract_error_code(response_payload)
+-
+-            if meta_error_code in _RETRYABLE_META_ERROR_CODES:
+-                raise (
+-                    MetaCloudAPIRetryableError(
+-                        ("Meta Cloud API returned a retryable provider error.")
+-                    )
+-                )
+-
+-            if not response.is_success:
+-                raise (
+-                    MetaCloudAPIPermanentError(
+-                        ("Meta Cloud API rejected the outbound message."),
+-                        status_code=(response.status_code),
+-                        meta_error_code=(meta_error_code),
+-                    )
+-                )
+-
+-            meta_message_id = self._extract_message_id(response_payload)
+-
+-            if meta_message_id is None:
+-                raise (
+-                    MetaCloudAPIAmbiguousResponseError(
+-                        ("Meta returned success without a message ID.")
+-                    )
+-                )
+-
+-            outcome = "success"
+-
+-            return MetaSendMessageResult(
+-                meta_message_id=(meta_message_id),
+-            )
+-
+-        finally:
+-            external_dependency_metrics.observe(
+-                dependency="meta",
+-                operation=operation,
+-                outcome=outcome,
+-                duration_seconds=max(
+-                    perf_counter() - started_at,
+-                    0.0,
+-                ),
+-            )
++            response = await self._http_client.post(
++                url,
++                headers={
++                    "Authorization": f"Bearer {access_token}",
++                    "Content-Type": "application/json",
++                },
++                json=payload,
++            )
++
++        except (
++            httpx.TimeoutException,
++            httpx.TransportError,
++        ) as exc:
++            raise MetaCloudAPIRetryableError(
++                "Meta Cloud API request failed transiently."
++            ) from exc
++
++        response_payload = self._decode_json(response)
++
++        if response.status_code == 429 or response.status_code >= 500:
++            raise MetaCloudAPIRetryableError(
++                "Meta Cloud API returned a retryable HTTP status."
++            )
++
++        meta_error_code = self._extract_error_code(response_payload)
++
++        if meta_error_code in _RETRYABLE_META_ERROR_CODES:
++            raise MetaCloudAPIRetryableError(
++                "Meta Cloud API returned a retryable provider error."
++            )
++
++        if not response.is_success:
++            raise MetaCloudAPIPermanentError(
++                "Meta Cloud API rejected the outbound message.",
++                status_code=response.status_code,
++                meta_error_code=meta_error_code,
++            )
++
++        meta_message_id = self._extract_message_id(response_payload)
++
++        if meta_message_id is None:
++            raise MetaCloudAPIAmbiguousResponseError(
++                "Meta returned success without a message ID."
++            )
++
++        return MetaSendMessageResult(
++            meta_message_id=meta_message_id,
++        )
++
+ 
+     @staticmethod
+     def _validate_version(
+--- a/app/integrations/meta/media_client.py
++++ b/app/integrations/meta/media_client.py
+@@ -11,9 +11,6 @@
+ 
+ from app.observability.external_metrics import (
+     external_dependency_metrics,
+-)
+-from app.observability.external_metrics import (
+-    observe_external_operation,
+ )
+ 
+ _GRAPH_VERSION_PATTERN = re.compile(r"^v\d+\.\d+$")
+@@ -53,12 +50,6 @@
+     ) -> None:
+         self._http_client = http_client
+ 
+-    @observe_external_operation(
+-        dependency="meta",
+-        retryable_errors=(MetaMediaAPIRetryableError,),
+-        permanent_errors=(MetaMediaAPIPermanentError,),
+-        ignored_errors=(ValueError,),
+-    )
+     async def download_media(
+         self,
+         *,
+@@ -68,38 +59,40 @@
+         access_token: str,
+         max_size_bytes: int | None = None,
+     ) -> MetaDownloadedMedia:
+-        if max_size_bytes is not None and max_size_bytes <= 0:
+-            raise ValueError(("max_size_bytes must be greater than zero."))
+-
+-        version = self._validate_version(graph_api_version)
+-
+-        media_id = provider_media_id.strip()
+-
+-        if not media_id:
+-            raise (MetaMediaAPIPermanentError("Meta media ID is empty."))
+-
+-        phone_id = phone_number_id.strip()
+-
+-        if not phone_id:
+-            raise (MetaMediaAPIPermanentError(("Meta phone number ID is empty.")))
+-
+         started_at = perf_counter()
+ 
+         try:
++            if max_size_bytes is not None and max_size_bytes <= 0:
++                raise ValueError("max_size_bytes must be greater than zero.")
++
++            version = self._validate_version(graph_api_version)
++
++            media_id = provider_media_id.strip()
++
++            if not media_id:
++                raise MetaMediaAPIPermanentError("Meta media ID is empty.")
++
++            phone_id = phone_number_id.strip()
++
++            if not phone_id:
++                raise MetaMediaAPIPermanentError("Meta phone number ID is empty.")
++
+             result = await self._download_validated_media(
+                 version=version,
+                 media_id=media_id,
+                 phone_id=phone_id,
+-                access_token=(access_token),
+-                max_size_bytes=(max_size_bytes),
+-            )
++                access_token=access_token,
++                max_size_bytes=max_size_bytes,
++            )
++
++        except ValueError:
++            raise
+ 
+         except MetaMediaAPIRetryableError:
+             self._observe(
+                 outcome="retryable_failure",
+                 started_at=started_at,
+             )
+-
+             raise
+ 
+         except MetaMediaAPIPermanentError:
+@@ -107,7 +100,13 @@
+                 outcome="permanent_failure",
+                 started_at=started_at,
+             )
+-
++            raise
++
++        except Exception:
++            self._observe(
++                outcome="failure",
++                started_at=started_at,
++            )
+             raise
+ 
+         self._observe(
+@@ -116,6 +115,7 @@
+         )
+ 
+         return result
++
+ 
+     async def _download_validated_media(
+         self,
+@@ -251,6 +251,7 @@
+     ) -> None:
+         external_dependency_metrics.observe(
+             dependency="meta",
++            operation="download_media",
+             outcome=outcome,
+             duration_seconds=max(
+                 perf_counter() - started_at,
+--- a/tests/test_meta_observability.py
++++ b/tests/test_meta_observability.py
+@@ -119,7 +119,7 @@
+ 
+     assert kwargs["operation"] == "send_text"
+ 
+-    assert kwargs["outcome"] == "failure"
++    assert kwargs["outcome"] == "retryable_failure"
+ 
+ 
+ @pytest.mark.asyncio
+@@ -177,29 +177,36 @@
+ 
+     assert result.data == b"abc"
+ 
+-    assert observe.call_count == 2
+-
+-    first = observe.call_args_list[0].kwargs
+-
+-    second = observe.call_args_list[1].kwargs
+-
+-    assert first == {
++    assert observe.call_count == 3
++
++    metadata = observe.call_args_list[0].kwargs
++    download = observe.call_args_list[1].kwargs
++    high_level = observe.call_args_list[2].kwargs
++
++    assert metadata == {
+         "dependency": "meta",
+-        "operation": ("media_metadata"),
++        "operation": "media_metadata",
+         "outcome": "success",
+-        "duration_seconds": (first["duration_seconds"]),
++        "duration_seconds": metadata["duration_seconds"],
+     }
+ 
+-    assert second == {
++    assert download == {
+         "dependency": "meta",
+-        "operation": ("media_download"),
++        "operation": "media_download",
+         "outcome": "success",
+-        "duration_seconds": (second["duration_seconds"]),
++        "duration_seconds": download["duration_seconds"],
+     }
+ 
+-    assert first["duration_seconds"] >= 0
+-
+-    assert second["duration_seconds"] >= 0
++    assert high_level == {
++        "dependency": "meta",
++        "operation": "download_media",
++        "outcome": "success",
++        "duration_seconds": high_level["duration_seconds"],
++    }
++
++    assert metadata["duration_seconds"] >= 0
++    assert download["duration_seconds"] >= 0
++    assert high_level["duration_seconds"] >= 0
+ 
+ 
+ @pytest.mark.asyncio
+@@ -239,12 +246,15 @@
+                 access_token=("secret-token"),
+             )
+ 
+-    observe.assert_called_once()
+-
+-    kwargs = observe.call_args.kwargs
+-
+-    assert kwargs["dependency"] == "meta"
+-
+-    assert kwargs["operation"] == "media_metadata"
+-
+-    assert kwargs["outcome"] == "failure"
++    assert observe.call_count == 2
++
++    metadata = observe.call_args_list[0].kwargs
++    high_level = observe.call_args_list[1].kwargs
++
++    assert metadata["dependency"] == "meta"
++    assert metadata["operation"] == "media_metadata"
++    assert metadata["outcome"] == "failure"
++
++    assert high_level["dependency"] == "meta"
++    assert high_level["operation"] == "download_media"
++    assert high_level["outcome"] == "retryable_failure"

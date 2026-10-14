@@ -173,9 +173,7 @@ async def test_employee_cannot_read_audit(
         writer,
     )
 
-    with pytest.raises(
-        HTTPException
-    ) as exc_info:
+    with pytest.raises(HTTPException) as exc_info:
         await _require_audit_read(
             request=_request(),
             request_context=_context(
@@ -187,7 +185,4 @@ async def test_employee_cannot_read_audit(
 
     writer.assert_awaited_once()
 
-    assert (
-        writer.await_args.kwargs["reason_code"]
-        == "audit_read_not_allowed"
-    )
+    assert writer.await_args.kwargs["reason_code"] == "audit_read_not_allowed"
